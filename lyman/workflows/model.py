@@ -21,6 +21,7 @@ import lyman
 from lyman.tools import ManyOutFiles, SaveParameters, nii_to_png
 import inspect
 
+
 def create_timeseries_model_workflow(name="model", exp_info=None):
 
     # Default experiment parameters for generating graph image, testing, etc.
