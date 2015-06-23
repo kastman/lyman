@@ -523,6 +523,8 @@ def parse_args(arglist):
                         help="perform registration on residual timeseries")
     parser.add_argument("-unsmoothed", action="store_true",
                         help="used unsmoothed data for model, reg, and ffx")
+    parser.add_argument('-working-dir', type=str, default=None,
+                        help='override working directory from project.py')
     return parser.parse_args(arglist)
 
 if __name__ == "__main__":
