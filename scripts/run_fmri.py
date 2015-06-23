@@ -54,7 +54,11 @@ def main(arglist):
     # Set roots of output storage
     data_dir = project["data_dir"]
     analysis_dir = op.join(project["analysis_dir"], exp_name)
-    working_dir = op.join(project["working_dir"], exp_name)
+    if args.working_dir:
+        working_dir = args.working_dir
+        project["working_dir"] = working_dir
+    else:
+        working_dir = op.join(project["working_dir"], exp_name)
     nipype.config.set("execution", "crashdump_dir", project["crash_dir"])
 
     # Create symlinks to the preproc directory for altmodels
