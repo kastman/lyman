@@ -16,6 +16,7 @@ mpl.use("Agg")
 
 import nipype
 from nipype import Node, MapNode, SelectFiles, DataSink, IdentityInterface
+from nipype.interfaces import utility as util
 
 import lyman
 import lyman.workflows as wf
@@ -53,9 +54,28 @@ def main(arglist):
     subj_source.inputs.subject_id = subject_list
 
     # Set up the regressors and contrasts
-    regressors = dict(group_mean=[1] * len(subject_list))
-    contrasts = [["group_mean", "T", ["group_mean"], [1]]]
+    all_covars = lyman.determine_covars()
+    group_regression_models = lyman.group_models(
+        group_contrasts=exp['group_regression_models'],
+        all_covars=all_covars,
+        subject_list=subject_list,
+        add_group_mean=True)
+    group_regression_names = group_regression_models.keys()
+    # if not isinstance(group_regression_names[0], list):
+    #     group_regression_names = [group_regression_names]
 
+    modelinfo = Node(interface=IdentityInterface(fields=['group_regression_name']),
+                     name='modelinfo')
+    modelinfo.iterables = [('group_regression_name', group_regression_names)]
+
+    modelsource = Node(
+        interface=util.Function(input_names=['group_regression_models',
+                                             'group_regression_name'],
+                                output_names=['regressors', 'contrasts', 'groups'],
+                                function=lyman.lookup_model),
+        name='modelsource')
+    modelsource.inputs.group_regression_models = group_regression_models
+    regressors, contrasts = None, None  # To test updates
     # Subject level contrast source
     contrast_source = Node(IdentityInterface(fields=["l1_contrast"]),
                            iterables=("l1_contrast", exp["contrast_names"]),
@@ -119,13 +139,25 @@ def main(arglist):
                 [("subject_id", "subject_id")])
                      ])
 
+    design = mfx.get_node('design')
+    mfx.connect([
+        (modelinfo, modelsource,
+            [('group_regression_name', 'group_regression_name')]),
+        (modelsource, design,
+            [('regressors', 'regressors'),
+             ('contrasts', 'contrasts'),
+             ('groups', 'groups')]),
+    ])
+
     # Mixed effects outputs
     mfx_sink = Node(DataSink(base_directory="/".join([anal_dir_base,
                                                       args.output,
-                                                      space]),
+                                                      space,
+                                                      'model1']),
                              substitutions=[("/stats", "/"),
                                             ("/_hemi_", "/"),
-                                            ("_glm_results", "")],
+                                            ("_glm_results", ""),
+                                            ("_group_regression_name_", "group_")],
                              parameterization=True),
                     name="mfx_sink")
 

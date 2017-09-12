@@ -27,7 +27,8 @@ def create_volume_mixedfx_workflow(name="volume_group",
                                    subject_list=None,
                                    regressors=None,
                                    contrasts=None,
-                                   exp_info=None):
+                                   exp_info=None,
+                                   groups=None):
 
     # Handle default arguments
     if subject_list is None:
@@ -38,6 +39,8 @@ def create_volume_mixedfx_workflow(name="volume_group",
         contrasts = [["group_mean", "T", ["group_mean"], [1]]]
     if exp_info is None:
         exp_info = lyman.default_experiment_parameters()
+    if groups is None:
+        groups = [1] * len(subject_list)
 
     # Define workflow inputs
     inputnode = Node(IdentityInterface(["l1_contrast",
@@ -47,10 +50,13 @@ def create_volume_mixedfx_workflow(name="volume_group",
                      "inputnode")
 
     # Merge the fixed effect summary images into one 4D image
-    merge = Node(MergeAcrossSubjects(regressors=regressors), "merge")
+    merge = Node(MergeAcrossSubjects(), "merge")
+    merge.inputs.group_mask_threshold = exp_info["group_mask_threshold"]
 
     # Make a simple design
-    design = Node(fsl.MultipleRegressDesign(contrasts=contrasts),
+    design = Node(fsl.MultipleRegressDesign(regressors=regressors,
+                                            contrasts=contrasts,
+                                            groups=groups),
                   "design")
 
     # Fit the mixed effects model
@@ -95,7 +101,10 @@ def create_volume_mixedfx_workflow(name="volume_group",
                                          "peak_file",
                                          "lut_file",
                                          "report",
-                                         "json_file"]),
+                                         "json_file",
+                                         "design_con",
+                                         "design_grp",
+                                         "design_mat"]),
                       "outputnode")
 
     # Define and connect up the workflow
@@ -112,8 +121,6 @@ def create_volume_mixedfx_workflow(name="volume_group",
              ("varcope_file", "var_cope_file"),
              ("dof_file", "dof_var_cope_file"),
              ("mask_file", "mask_file")]),
-        (merge, design,
-            [("regressors", "regressors")]),
         (design, flameo,
             [("design_con", "t_con_file"),
              ("design_grp", "cov_split_file"),
@@ -148,6 +155,10 @@ def create_volume_mixedfx_workflow(name="volume_group",
             [("cope_file", "copes"),
              ("varcope_file", "varcopes"),
              ("mask_file", "mask_file")]),
+        (design, outputnode,
+            [("design_con", "design_con"),
+             ("design_grp", "design_grp"),
+             ("design_mat", "design_mat")]),
         (flameo, outputnode,
             [("stats_dir", "flameo_stats")]),
         (cluster, outputnode,
@@ -234,7 +245,10 @@ class MergeInput(BaseInterfaceInputSpec):
     cope_files = InputMultiPath(File(exists=True))
     varcope_files = InputMultiPath(File(exists=True))
     dof_files = InputMultiPath(File(exists=True))
-    regressors = traits.Dict()
+    group_mask_threshold = traits.Range(0., 1.,
+                                        desc="Percent of subjects required "
+                                             "for a voxel to be included in "
+                                             "the group mask")
 
 
 class MergeOutput(TraitedSpec):
@@ -243,7 +257,6 @@ class MergeOutput(TraitedSpec):
     varcope_file = File(exists=True)
     dof_file = File(exists=True)
     mask_file = File(exists=True)
-    regressors = traits.Dict()
 
 
 class MergeAcrossSubjects(BaseInterface):
@@ -265,7 +278,8 @@ class MergeAcrossSubjects(BaseInterface):
 
             # Use the varcope image to make a group mask
             if ftype == "varcope":
-                mask_img = self._create_group_mask(out_img)
+                mask_img = self._create_group_mask(out_img,
+                    self.inputs.group_mask_threshold)
                 mask_img.to_filename("group_mask.nii.gz")
 
         # Filter the regressor columns
@@ -291,7 +305,7 @@ class MergeAcrossSubjects(BaseInterface):
         out_img = nib.concat_images(images)
         return out_img
 
-    def _create_group_mask(self, var_img):
+    def _create_group_mask(self, var_img, group_mask_threshold=1):
 
         mni_mask = fsl.Info.standard_image("MNI152_T1_2mm_brain_mask.nii.gz")
         mni_img = nib.load(mni_mask)
@@ -299,7 +313,12 @@ class MergeAcrossSubjects(BaseInterface):
 
         # Find the voxels with positive variance
         var_data = var_img.get_data()
-        good_var = (var_data > 0).all(axis=-1)
+        # good_var = (var_data > 0).all(axis=-1)
+
+        # Count per voxel the percent of subjects with "good" values.
+        # Then create binary mask where that pct is >= threshold
+        good_count = (var_data > 0).sum() / float(var_data.shape[-1])
+        good_var = good_count >= group_mask_threshold
 
         # Find the intersection
         mask_data &= good_var
