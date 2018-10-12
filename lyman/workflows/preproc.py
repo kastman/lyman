@@ -109,12 +109,8 @@ def create_preprocessing_workflow(name="preproc", exp_info=None):
             [("out_file", "inputs.timeseries")]),
         (realign, artifacts,
             [("outputs.motion_file", "motion_file")]),
-        (realign, coregister,
-            [("outputs.timeseries", "inputs.timeseries")]),
         (inputnode, coregister,
             [("subject_id", "inputs.subject_id")]),
-        (realign, skullstrip,
-            [("outputs.timeseries", "inputs.timeseries")]),
         (inputnode, skullstrip,
             [("subject_id", "inputs.subject_id")]),
         (coregister, skullstrip,
@@ -143,15 +139,19 @@ def create_preprocessing_workflow(name="preproc", exp_info=None):
         preproc.connect([
             (inputnode, unwarp,
                 [("fieldmap", "inputs.fieldmap")]),
-            (prepare, unwarp,
-                [("out_file", "inputs.timeseries")]),
-            (unwarp, realign,
+            (realign, unwarp,
+                [("outputs.timeseries", "inputs.timeseries")]),
+            (unwarp, skullstrip,
+                [("outputs.timeseries", "inputs.timeseries")]),
+            (unwarp, coregister,
                 [("outputs.timeseries", "inputs.timeseries")])
         ])
     else:
         preproc.connect([
-            (prepare, realign,
-                [("out_file", "inputs.timeseries")]),
+            (realign, skullstrip,
+                [("outputs.timeseries", "inputs.timeseries")]),
+            (realign, coregister,
+                [("outputs.timeseries", "inputs.timeseries")]),
         ])
 
     if bool(exp_info["whole_brain_template"]):
