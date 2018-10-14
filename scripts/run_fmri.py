@@ -84,6 +84,8 @@ def main(arglist):
     preproc_templates = dict(timeseries=exp["source_template"])
     if exp["partial_brain"]:
         preproc_templates["whole_brain_template"] = exp["whole_brain_template"]
+    if exp["fieldmap_template"]:
+        preproc_templates["fieldmap"] = exp["fieldmap_template"]
 
     preproc_source = Node(SelectFiles(preproc_templates,
                                       base_directory=project["data_dir"]),
@@ -401,7 +403,7 @@ def parse_args(arglist):
             on either smoothed or unsmoothed data. Fixed effects results in the
             mni space can be used for volume-based group analysis, and the
             results in the epi space can be used with the surface-based group
-            pipeline. 
+            pipeline.
 
     Many details of these workflows can be configured by setting values in the
     experiment file. Additionally, it is possible to preprocess the data for an
@@ -417,7 +419,7 @@ def parse_args(arglist):
     Examples
     --------
 
-    
+
     Note that the parameter switches match any unique short version
     of the full parameter name.
 
