@@ -4,6 +4,7 @@ import os.path as op
 import numpy as np
 import pandas as pd
 import nibabel as nib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from moss.mosaic import Mosaic
@@ -174,8 +175,8 @@ def create_preprocessing_workflow(name="preproc", exp_info=None):
                      "coreg_report",
                      "json_file"]
 
-    # if bool(exp_info["fieldmap_template"]):
-    #     output_fields.append("unwarp_report")
+    if bool(exp_info["fieldmap_template"]):
+        output_fields.append("unwarp_report")
 
     outputnode = Node(IdentityInterface(output_fields), "outputs")
 
@@ -201,11 +202,11 @@ def create_preprocessing_workflow(name="preproc", exp_info=None):
             [("json_file", "json_file")]),
         ])
 
-    # if bool(exp_info["fieldmap_template"]):
-    #     preproc.connect([
-    #         (unwarp, outputnode,
-    #             [("outputs.report", "unwarp_report")]),
-    #     ])
+    if bool(exp_info["fieldmap_template"]):
+        preproc.connect([
+            (unwarp, outputnode,
+                [("outputs.report", "unwarp_report")]),
+        ])
 
     return preproc, inputnode, outputnode
 
@@ -233,8 +234,8 @@ def create_unwarp_workflow(name="unwarp", fieldmap_pe=("y", "y-")):
                          "applytopup")
 
     # # Make a figure summarize the unwarping
-    # report = MapNode(UnwarpReport(),
-    #                  ["orig_file", "corrected_file"], "unwarp_report")
+    report = MapNode(UnwarpReport(),
+                     ["orig_file", "corrected_file"], "unwarp_report")
 
     # Define the outputs
     outputnode = Node(IdentityInterface(["timeseries", "report"]), "outputs")
@@ -250,14 +251,14 @@ def create_unwarp_workflow(name="unwarp", fieldmap_pe=("y", "y-")):
             [("out_fieldcoef", "in_topup_fieldcoef"),
              ("out_movpar", "in_topup_movpar"),
              ("out_enc_file", "encoding_file")]),
-        # (inputnode, report,
-        #     [("fieldmap", "orig_file")]),
-        # (topup, report,
-        #     [("out_corrected", "corrected_file")]),
+        (inputnode, report,
+            [("fieldmap", "orig_file")]),
+        (topup, report,
+            [("out_corrected", "corrected_file")]),
         (applytopup, outputnode,
             [("out_corrected", "timeseries")]),
-        # (report, outputnode,
-        #     [("out_file", "report")]),
+        (report, outputnode,
+            [("out_file", "report")]),
         ])
 
     return unwarp
