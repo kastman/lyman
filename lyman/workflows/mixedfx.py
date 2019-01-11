@@ -25,28 +25,22 @@ from lyman.tools import SaveParameters, add_suffix, nii_to_png
 
 def create_volume_mixedfx_workflow(name="volume_group",
                                    subject_list=None,
-                                   regressors=None,
-                                   contrasts=None,
-                                   exp_info=None,
-                                   groups=None):
+                                   exp_info=None):
 
     # Handle default arguments
     if subject_list is None:
         subject_list = []
-    if regressors is None:
-        regressors = dict(group_mean=[])
-    if contrasts is None:
-        contrasts = [["group_mean", "T", ["group_mean"], [1]]]
     if exp_info is None:
         exp_info = lyman.default_experiment_parameters()
-    if groups is None:
-        groups = [1] * len(subject_list)
 
     # Define workflow inputs
     inputnode = Node(IdentityInterface(["l1_contrast",
                                         "copes",
                                         "varcopes",
-                                        "dofs"]),
+                                        "dofs",
+                                        "regressors",
+                                        "groups",
+                                        "contrasts"]),
                      "inputnode")
 
     # Merge the fixed effect summary images into one 4D image
@@ -54,10 +48,7 @@ def create_volume_mixedfx_workflow(name="volume_group",
     merge.inputs.group_mask_threshold = exp_info["group_mask_threshold"]
 
     # Make a simple design
-    design = Node(fsl.MultipleRegressDesign(regressors=regressors,
-                                            contrasts=contrasts,
-                                            groups=groups),
-                  "design")
+    design = Node(fsl.MultipleRegressDesign(), "design")
 
     # Fit the mixed effects model
     flameo = Node(fsl.FLAMEO(run_mode=exp_info["flame_mode"]), "flameo")
@@ -113,14 +104,21 @@ def create_volume_mixedfx_workflow(name="volume_group",
         (inputnode, merge,
             [("copes", "cope_files"),
              ("varcopes", "varcope_files"),
-             ("dofs", "dof_files")]),
+             ("dofs", "dof_files"),
+             ("regressors", "regressors"),
+             ("groups", "groups")]),
         (inputnode, saveparams,
             [("copes", "in_file")]),
+        (inputnode, design,
+            [("contrasts", "contrasts")]),
         (merge, flameo,
             [("cope_file", "cope_file"),
              ("varcope_file", "var_cope_file"),
              ("dof_file", "dof_var_cope_file"),
              ("mask_file", "mask_file")]),
+        (merge, design,
+            [('regressors', 'regressors'),
+             ('groups', 'groups')]),
         (design, flameo,
             [("design_con", "t_con_file"),
              ("design_grp", "cov_split_file"),
@@ -245,6 +243,8 @@ class MergeInput(BaseInterfaceInputSpec):
     cope_files = InputMultiPath(File(exists=True))
     varcope_files = InputMultiPath(File(exists=True))
     dof_files = InputMultiPath(File(exists=True))
+    regressors = traits.Dict()
+    groups = traits.List()
     group_mask_threshold = traits.Range(0., 1.,
                                         desc="Percent of subjects required "
                                              "for a voxel to be included in "
@@ -257,6 +257,8 @@ class MergeOutput(TraitedSpec):
     varcope_file = File(exists=True)
     dof_file = File(exists=True)
     mask_file = File(exists=True)
+    regressors = traits.Dict()
+    groups = traits.List()
 
 
 class MergeAcrossSubjects(BaseInterface):
@@ -289,6 +291,12 @@ class MergeAcrossSubjects(BaseInterface):
                             if i in good_indices]
             filtered_regressors[name] = filtered_col
         self.filtered_regressors = filtered_regressors
+
+        n = len(self.inputs.groups)
+        mask_array = np.zeros(n, dtype=int)
+        mask_array[good_indices] = 1
+
+        self.filtered_groups = list(mask_array)
 
         return runtime
 
@@ -337,6 +345,7 @@ class MergeAcrossSubjects(BaseInterface):
             outputs[ftype + "_file"] = op.realpath(ftype + "_merged.nii.gz")
         outputs["mask_file"] = op.realpath("group_mask.nii.gz")
         outputs["regressors"] = self.filtered_regressors
+        outputs["groups"] = self.filtered_groups
         return outputs
 
 

@@ -197,7 +197,6 @@ def build_regressor(all_covars,
     for name, vals in all_covars.loc[subject_list, regressor_names].iteritems(
     ):
         values = vals.values.astype(float)  # Cast to float for division.
-        # import pdb; pdb.set_trace()
         if not np.allclose(values.mean(), 0):
             msg = 'Covariate %s was not mean-centered - ' % name
             if mean_center == 'adjust':
@@ -249,7 +248,7 @@ def group_models(group_contrasts,
         regressors = build_regressor(all_covars,
                                      regressor_names,
                                      subject_list,
-                                     mean_center='warn')
+                                     mean_center='adjust')
         models[con_name]['design'] = regressors
         full_con = list(con)  # [c.insert('T', 1) for c in con]
         full_con.insert(1, 'T')

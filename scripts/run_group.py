@@ -86,7 +86,7 @@ def main(arglist):
     wf_name = "_".join([space, args.output])
     if space == "mni":
         mfx, mfx_input, mfx_output = wf.create_volume_mixedfx_workflow(
-            wf_name, subject_list, regressors, contrasts, exp)
+            wf_name, subject_list, exp)
     else:
         mfx, mfx_input, mfx_output = wf.create_surface_ols_workflow(
             wf_name, subject_list, exp)
@@ -139,11 +139,10 @@ def main(arglist):
                 [("subject_id", "subject_id")])
                      ])
 
-    design = mfx.get_node('design')
     mfx.connect([
         (modelinfo, modelsource,
             [('group_regression_name', 'group_regression_name')]),
-        (modelsource, design,
+        (modelsource, mfx_input,
             [('regressors', 'regressors'),
              ('contrasts', 'contrasts'),
              ('groups', 'groups')]),
